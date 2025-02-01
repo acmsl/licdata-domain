@@ -22,11 +22,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from org.acmsl.licdata.events.clients import (
     BaseClientEvent,
     ClientAlreadyExists,
+    ListClientsRequested,
+    MatchingClientsFound,
     NewClientCreated,
     NewClientRequested,
+    NoMatchingClientsFound,
 )
 from pythoneda.shared import (
     Entity,
+    Event,
     EventListener,
     primary_key_attribute,
     attribute,
@@ -69,11 +73,11 @@ class Client(Entity, EventListener):
         :param phone: The phone.
         :type phone: Optional[str]
         """
-        super().__init__()
         self._email = email
         self._address = address
         self._contact = contact
         self._phone = phone
+        super().__init__()
 
     @property
     @primary_key_attribute
@@ -172,25 +176,61 @@ class Client(Entity, EventListener):
                 event.phone,
             )
 
-            repo.insert(new_client)
+            repo.insert(event)
 
-            result.append(
-                NewClientCreated(
-                    new_client.id,
-                    new_client.email,
-                    new_client.address,
-                    new_client.contact,
-                    new_client.phone,
-                )
+            new_client_created = NewClientCreated(
+                new_client.email,
+                new_client.address,
+                new_client.contact,
+                new_client.phone,
+                event.previous_event_ids + [event.id],
             )
+            result.append(new_client_created)
         else:
             result.append(
                 ClientAlreadyExists(
-                    existing_client.id,
                     existing_client.email,
                     existing_client.address,
                     existing_client.contact,
                     existing_client.phone,
+                    event.previous_event_ids + [event.id],
+                )
+            )
+
+        return result
+
+    @classmethod
+    @listen(ListClientsRequested)
+    async def listen_ListClientsRequested(
+        cls, event: ListClientsRequested
+    ) -> List[Event]:
+        """
+        Receives an event requesting the listing of clients.
+        :param event: The request.
+        :type event: org.acmsl.licdata.events.ListClientsRequested
+        :return: The event representing the outcome of the operation.
+        :rtype event: List[pythoneda.shared.Event]
+        """
+        from .client_repo import ClientRepo
+
+        cls.logger().info(f"List clients requested: {event}")
+
+        result = []
+
+        repo = Ports.instance().resolve_first(ClientRepo)
+
+        existing_clients = repo.list()
+
+        if len(existing_clients) == 0:
+            no_matching_clients_found = NoMatchingClientsFound(
+                {}, event.previous_event_ids + [event.id]
+            )
+            result.append(no_matching_clients_found)
+        else:
+            result.append(
+                MatchingClientsFound(
+                    existing_clients,
+                    {},
                     event.previous_event_ids + [event.id],
                 )
             )
