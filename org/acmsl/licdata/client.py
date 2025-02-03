@@ -22,6 +22,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from org.acmsl.licdata.events.clients import (
     BaseClientEvent,
     ClientAlreadyExists,
+    ClientDeleted,
+    DeleteClientRequested,
     ListClientsRequested,
     MatchingClientsFound,
     NewClientCreated,
@@ -78,6 +80,15 @@ class Client(Entity, EventListener):
         self._contact = contact
         self._phone = phone
         super().__init__()
+
+    @classmethod
+    def empty(cls):
+        """
+        Builds an empty instance. Required for unmarshalling.
+        :return: An empty instance.
+        :rtype: pythoneda.ValueObject
+        """
+        return cls(email="", address="", contact="", phone="")
 
     @property
     @primary_key_attribute
@@ -149,51 +160,40 @@ class Client(Entity, EventListener):
     @classmethod
     @listen(NewClientRequested)
     async def listen_NewClientRequested(
-        cls, event: NewClientRequested
+        cls, newClientRequested: NewClientRequested
     ) -> List[BaseClientEvent]:
         """
         Receives an event requesting the creation of a new client.
-        :param event: The request.
-        :type event: org.acmsl.licdata.events.NewClientRequested
+        :param newClientRequested: The request.
+        :type newClientRequested: org.acmsl.licdata.events.NewClientRequested
         :return: The event representing a new client has been created.
         :rtype event: List[org.acmsl.licdata.events.clients.BaseClientEvent]
         """
         from .client_repo import ClientRepo
 
-        cls.logger().info(f"New client requested: {event}")
+        cls.logger().info(f"New client requested: {newClientRequested}")
 
         result = []
 
         repo = Ports.instance().resolve_first(ClientRepo)
 
-        existing_client = repo.find_by_pk({"email": event.email})
+        existing_client = repo.find_by_pk({"email": newClientRequested.email})
 
         if existing_client is None:
-            new_client = Client(
-                event.email,
-                event.address,
-                event.contact,
-                event.phone,
-            )
+            new_client_created = repo.insert(newClientRequested)
 
-            repo.insert(event)
-
-            new_client_created = NewClientCreated(
-                new_client.email,
-                new_client.address,
-                new_client.contact,
-                new_client.phone,
-                event.previous_event_ids + [event.id],
-            )
             result.append(new_client_created)
         else:
             result.append(
                 ClientAlreadyExists(
-                    existing_client.email,
-                    existing_client.address,
-                    existing_client.contact,
-                    existing_client.phone,
-                    event.previous_event_ids + [event.id],
+                    id=existing_client.id,
+                    email=existing_client.email,
+                    address=existing_client.address,
+                    contact=existing_client.contact,
+                    phone=existing_client.phone,
+                    previousEventIds=(
+                        newClientRequested.previous_event_ids + [newClientRequested.id]
+                    ),
                 )
             )
 
@@ -212,8 +212,6 @@ class Client(Entity, EventListener):
         :rtype event: List[pythoneda.shared.Event]
         """
         from .client_repo import ClientRepo
-
-        cls.logger().info(f"List clients requested: {event}")
 
         result = []
 
@@ -234,5 +232,48 @@ class Client(Entity, EventListener):
                     event.previous_event_ids + [event.id],
                 )
             )
+
+        return result
+
+    @classmethod
+    @listen(DeleteClientRequested)
+    async def listen_DeleteClientRequested(
+        cls, event: DeleteClientRequested
+    ) -> List[Event]:
+        """
+        Receives an event requesting the creation of a new client.
+        :param event: The request.
+        :type event: org.acmsl.licdata.events.DeleteClientRequested
+        :return: The event representing a deleting a client has been requested.
+        :rtype event: List[pythoneda.shared.Event]
+        """
+        from .client_repo import ClientRepo
+
+        cls.logger().info(f"Delete client requested: {event}")
+
+        result = []
+
+        repo = Ports.instance().resolve_first(ClientRepo)
+
+        existing_client = repo.find_by_id(event.entity_id)
+
+        if existing_client is None:
+            result.append(
+                NoMatchingClientsFound(
+                    {"id": event.entity_id},
+                    event.previous_event_ids + [event.id],
+                )
+            )
+        else:
+            repo.delete(event.entity_id)
+
+            client_deleted = ClientDeleted(
+                existing_client.email,
+                existing_client.address,
+                existing_client.contact,
+                existing_client.phone,
+                event.previous_event_ids + [event.id],
+            )
+            result.append(client_deleted)
 
         return result
