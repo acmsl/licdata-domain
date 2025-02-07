@@ -19,7 +19,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from pythoneda.shared import Entity, primary_key_attribute, attribute
+from pythoneda.shared import attribute, Entity, EventReference, primary_key_attribute
+from typing import List
 
 
 class ProductType(Entity):
@@ -35,19 +36,21 @@ class ProductType(Entity):
         - None
     """
 
-    def __init__(self, id: str, name: str, version: str):
+    def __init__(
+        self, name: str, version: str, eventHistory: List[EventReference] = []
+    ):
         """
         Creates a new ProductType instance.
-        :param id: The id.
-        :type id: str
         :param name: The name.
         :type name: str
         :param version: The version.
         :type version: str
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
-        super().__init__(id)
         self._name = name
         self._version = version
+        super().__init__(eventHistory=eventHistory)
 
     @property
     @primary_key_attribute

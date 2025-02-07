@@ -20,12 +20,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 from pythoneda.shared import (
-    Entity,
-    primary_key_attribute,
     attribute,
+    Entity,
+    EventReference,
     filter_attribute,
+    primary_key_attribute,
     sensitive,
 )
+from typing import List
 
 
 class User(Entity):
@@ -41,19 +43,21 @@ class User(Entity):
         - None
     """
 
-    def __init__(self, id: str, email: str, password: str):
+    def __init__(
+        self, email: str, password: str, eventHistory: List[EventReference] = []
+    ):
         """
         Creates a new User instance.
-        :param id: The id.
-        :type id: str
         :param email: The email.
         :type email: str
         :param password: The password
         :type password: str
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
-        super().__init__(id)
         self._email = email
         self._password = password
+        super().__init__(eventHistory=eventHistory)
 
     @property
     @filter_attribute

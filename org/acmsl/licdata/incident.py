@@ -19,7 +19,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from pythoneda.shared import Entity, primary_key_attribute
+from pythoneda.shared import Entity, EventReference, primary_key_attribute
+from typing import List
 
 
 class Incident(Entity):
@@ -36,19 +37,21 @@ class Incident(Entity):
         - PC: Each incident is related to a PC.
     """
 
-    def __init__(self, id: str, license_id: str, pc_id: str):
+    def __init__(
+        self, licenseId: str, pcId: str, eventHistory: List[EventReference] = []
+    ):
         """
         Creates a new Incident instance.
-        :param id: The id.
-        :type id: str
-        :param license_id: The id of the license.
-        :type license_id: str
-        :param pc_id: The id of the PC.
-        :type pc_id: str
+        :param licenseId: The id of the license.
+        :type licenseId: str
+        :param pcId: The id of the PC.
+        :type pcId: str
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
-        super().__init__(id)
-        self._license_id = license_id
-        self._pc_id = pc_id
+        self._license_id = licenseId
+        self._pc_id = pcId
+        super().__init__(eventHistory=eventHistory)
 
     @property
     @primary_key_attribute

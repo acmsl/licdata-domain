@@ -19,7 +19,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from pythoneda.shared import Entity, primary_key_attribute, attribute
+from pythoneda.shared import Entity, EventReference, primary_key_attribute, attribute
+from typing import List
 
 
 class Pc(Entity):
@@ -35,16 +36,18 @@ class Pc(Entity):
         - None
     """
 
-    def __init__(self, id: str, installationCode: str):
+    def __init__(self, installationCode: str, eventHistory: List[EventReference] = []):
         """
         Creates a new Pc instance.
         :param id: The id.
         :type id: str
         :param installationCode: The installation code.
         :type installationCode: str
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
-        super().__init__(id)
         self._installation_code = installationCode
+        super().__init__(eventHistory=eventHistory)
 
     @property
     @primary_key_attribute

@@ -24,21 +24,23 @@ from org.acmsl.licdata.events.clients import (
     ClientAlreadyExists,
     ClientDeleted,
     DeleteClientRequested,
+    FindClientByIdRequested,
     ListClientsRequested,
+    MatchingClientFound,
     MatchingClientsFound,
     NewClientCreated,
     NewClientRequested,
     NoMatchingClientsFound,
 )
 from pythoneda.shared import (
+    attribute,
     Entity,
     Event,
     EventListener,
-    primary_key_attribute,
-    attribute,
-    EventListener,
+    EventReference,
     listen,
     Ports,
+    primary_key_attribute,
 )
 from typing import List, Optional
 
@@ -63,6 +65,7 @@ class Client(Entity, EventListener):
         address: Optional[str] = None,
         contact: Optional[str] = None,
         phone: Optional[str] = None,
+        eventHistory: List[EventReference] = [],
     ):
         """
         Creates a new Client instance.
@@ -74,12 +77,15 @@ class Client(Entity, EventListener):
         :type contact: Optional[str]
         :param phone: The phone.
         :type phone: Optional[str]
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
         self._email = email
         self._address = address
         self._contact = contact
         self._phone = phone
-        super().__init__()
+        super().__init__(eventHistory=eventHistory)
+        print(f"email: {email}, address: {address}, contact: {contact}, phone: {phone}")
 
     @classmethod
     def empty(cls):
@@ -88,7 +94,64 @@ class Client(Entity, EventListener):
         :return: An empty instance.
         :rtype: pythoneda.ValueObject
         """
-        return cls(email="", address="", contact="", phone="")
+        return cls(email="[not-set]")
+
+    @classmethod
+    def _create_instance_from(cls, event: NewClientRequested):
+        """
+        Creates a new instance from a NewClientRequested event.
+        :param event: The event.
+        :type event: org.acmsl.licdata.events.NewClientRequested
+        :return: A new instance.
+        :rtype: org.acmsl.licdata.Client
+        """
+        return cls(
+            email=event.email,
+            address=event.address,
+            contact=event.contact,
+            phone=event.phone,
+            eventHistory=[EventReference(event.id, event.__class__.__name__)],
+        )
+
+    def create_created_event(
+        self, createRequested: NewClientRequested
+    ) -> NewClientCreated:
+        """
+        Creates a new client created event.
+        :param createRequested: The request.
+        :type createRequested: org.acmsl.licdata.events.NewClientRequested
+        :return: The event.
+        :rtype: org.acmsl.licdata.events.NewClientCreated
+        """
+        return NewClientCreated(
+            entityId=self.id,
+            email=self.email,
+            address=self.address,
+            contact=self.contact,
+            phone=self.phone,
+            previousEventIds=(
+                createRequested.previous_event_ids + [createRequested.id]
+            ),
+        )
+
+    def create_deleted_event(
+        self, deleteRequest: DeleteClientRequested
+    ) -> ClientDeleted:
+        """
+        Creates a deleted event.
+        :param deleteRequest: The request.
+        :type deleteRequest: org.acmsl.licdata.events.DeleteClientRequested
+        :return: The event.
+        :rtype: org.acmsl.licdata.events.ClientDeleted
+        """
+        return ClientDeleted(
+            entityId=self.id,
+            email=self.email,
+            address=self.address,
+            contact=self.contact,
+            phone=self.phone,
+            previousEventIds=deleteRequest.previous_event_ids + [deleteRequest.id],
+        )
 
     @property
     @primary_key_attribute
@@ -200,6 +263,41 @@ class Client(Entity, EventListener):
         return result
 
     @classmethod
+    @listen(FindClientByIdRequested)
+    async def listen_FindClientByIdRequested(
+        cls, event: FindClientByIdRequested
+    ) -> List[Event]:
+        """
+        Receives an event requesting a client by its id.
+        :param event: The request.
+        :type event: org.acmsl.licdata.events.FindClientByIdRequested
+        :return: The event representing the outcome of the operation.
+        :rtype event: List[pythoneda.shared.Event]
+        """
+        from .client_repo import ClientRepo
+
+        result = []
+
+        repo = Ports.instance().resolve_first(ClientRepo)
+
+        existing_client = repo.find_by_id(event.entity_id)
+
+        if existing_client is None:
+            no_matching_clients_found = NoMatchingClientsFound(
+                {}, event.previous_event_ids + [event.id]
+            )
+            result.append(no_matching_clients_found)
+        else:
+            result.append(
+                MatchingClientFound(
+                    existing_client,
+                    event.previous_event_ids + [event.id],
+                )
+            )
+
+        return result
+
+    @classmethod
     @listen(ListClientsRequested)
     async def listen_ListClientsRequested(
         cls, event: ListClientsRequested
@@ -249,31 +347,10 @@ class Client(Entity, EventListener):
         """
         from .client_repo import ClientRepo
 
-        cls.logger().info(f"Delete client requested: {event}")
-
         result = []
 
         repo = Ports.instance().resolve_first(ClientRepo)
 
-        existing_client = repo.find_by_id(event.entity_id)
-
-        if existing_client is None:
-            result.append(
-                NoMatchingClientsFound(
-                    {"id": event.entity_id},
-                    event.previous_event_ids + [event.id],
-                )
-            )
-        else:
-            repo.delete(event.entity_id)
-
-            client_deleted = ClientDeleted(
-                existing_client.email,
-                existing_client.address,
-                existing_client.contact,
-                existing_client.phone,
-                event.previous_event_ids + [event.id],
-            )
-            result.append(client_deleted)
+        result.append(repo.delete(event))
 
         return result

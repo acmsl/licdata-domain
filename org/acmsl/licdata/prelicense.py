@@ -19,7 +19,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from pythoneda.shared import Entity, primary_key_attribute, attribute
+from pythoneda.shared import Entity, EventReference, primary_key_attribute, attribute
+from typing import List
 
 
 class Prelicense(Entity):
@@ -35,7 +36,13 @@ class Prelicense(Entity):
         - Order: A Prelicense belongs to an order.
     """
 
-    def __init__(self, id: str, orderId: str, seats: int, duration: int):
+    def __init__(
+        self,
+        orderId: str,
+        seats: int,
+        duration: int,
+        eventHistory: List[EventReference] = [],
+    ):
         """
         Creates a new Prelicense instance.
         :param id: The id.
@@ -46,11 +53,13 @@ class Prelicense(Entity):
         :type seats: int
         :param duration: The duration.
         :type duration: int
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
-        super().__init__(id)
         self._order_id = orderId
         self._seats = seats
         self._duration = duration
+        super().__init__(eventHistory=eventHistory)
 
     @property
     @primary_key_attribute

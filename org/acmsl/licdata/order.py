@@ -19,7 +19,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from pythoneda.shared import Entity, primary_key_attribute, attribute
+from pythoneda.shared import Entity, EventReference, primary_key_attribute, attribute
+from typing import List
 
 
 class Order(Entity):
@@ -37,7 +38,12 @@ class Order(Entity):
     """
 
     def __init__(
-        self, id: str, clientId: str, productId: str, duration: int, orderDate
+        self,
+        clientId: str,
+        productId: str,
+        duration: int,
+        orderDate,
+        eventHistory: List[EventReference] = [],
     ):
         """
         Creates a new Order instance.
@@ -49,12 +55,14 @@ class Order(Entity):
         :type duration: int
         :param orderDate: When the order was placed.
         :type orderDate: date
+        :param eventHistory: The event history.
+        :type eventHistory: List[pythoneda.shared.EventReference]
         """
-        super().__init__(id)
         self._client_id = clientId
         self._product_id = productId
         self._duration = duration
         self._order_date = orderDate
+        super().__init__(eventHistory=eventHistory)
 
     @property
     @primary_key_attribute
