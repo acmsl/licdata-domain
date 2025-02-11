@@ -23,6 +23,7 @@ from org.acmsl.licdata.events.clients import (
     BaseClientEvent,
     ClientAlreadyExists,
     ClientDeleted,
+    ClientUpdated,
     DeleteClientRequested,
     FindClientByIdRequested,
     ListClientsRequested,
@@ -31,6 +32,7 @@ from org.acmsl.licdata.events.clients import (
     NewClientCreated,
     NewClientRequested,
     NoMatchingClientsFound,
+    UpdateClientRequested,
 )
 from pythoneda.shared import (
     attribute,
@@ -95,6 +97,18 @@ class Client(Entity, EventListener):
         :rtype: pythoneda.ValueObject
         """
         return cls(email="[not-set]")
+
+    def apply_updated(self, event: ClientUpdated):
+        """
+        Applies given updated event.
+        :param event: The updated event.
+        :type event: org.acmsl.licdata.events.clients.ClientUpdated
+        """
+        print(f"Applying updated event: {event}")
+        self._address = event.address
+        self._contact = event.contact
+        self._phone = event.phone
+        self._annotate_event(event)
 
     @classmethod
     def _create_instance_from(cls, event: NewClientRequested):
@@ -243,9 +257,7 @@ class Client(Entity, EventListener):
         existing_client = repo.find_by_pk({"email": newClientRequested.email})
 
         if existing_client is None:
-            new_client_created = repo.insert(newClientRequested)
-
-            result.append(new_client_created)
+            result.append(repo.insert(newClientRequested))
         else:
             result.append(
                 ClientAlreadyExists(
@@ -352,5 +364,42 @@ class Client(Entity, EventListener):
         repo = Ports.instance().resolve_first(ClientRepo)
 
         result.append(repo.delete(event))
+
+        return result
+
+    @classmethod
+    @listen(UpdateClientRequested)
+    async def listen_UpdateClientRequested(
+        cls, updateClientRequested: UpdateClientRequested
+    ) -> List[Event]:
+        """
+        Receives an event requesting updating a client.
+        :param updateClientRequested: The request.
+        :type updateClientRequested: org.acmsl.licdata.events.UpdateClientRequested
+        :return: The event representing the request to update a client.
+        :rtype event: List[pythoneda.shared.Event]
+        """
+        from .client_repo import ClientRepo
+
+        result = []
+
+        cls.logger().info(f"Update client requested: {updateClientRequested}")
+
+        repo = Ports.instance().resolve_first(ClientRepo)
+
+        existing_client = repo.find_by_id(updateClientRequested.entity_id)
+
+        if existing_client is None:
+            result.append(
+                NoMatchingClientsFound(
+                    id=updateClientRequested.entity_id,
+                    previousEventIds=(
+                        updateClientRequested.previous_event_ids
+                        + [updateClientRequested.id]
+                    ),
+                )
+            )
+        else:
+            result.append(repo.update(updateClientRequested))
 
         return result
